@@ -16,14 +16,26 @@ ID_0 = [
     39, 219, 265, 334
 ]
 
+ID = {
+    18: MARK_IMAGE_1,
+    0 : MARK_IMAGE_2,
+    1 : MARK_IMAGE_3,
+    2 : MARK_IMAGE_4,
+    3 : MARK_IMAGE_5
+}
+
 POSITION = [
-    ['LTRB', 'TRBL', 'RBLT', 'BLTR'],
-    ['BLTR', 'LTRB', 'TRBL', 'RBLT'],
-    ['RBLT', 'BLTR', 'LTRB', 'TRBL'],
-    ['TRBL', 'RBLT', 'BLTR', 'LTRB']
+    'LTRB', 'BLTR', 'RBLT', 'TRBL'
+    # ['BLTR', 'LTRB', 'TRBL', 'RBLT'],
+    # ['RBLT', 'BLTR', 'LTRB', 'TRBL'],
+    # ['TRBL', 'RBLT', 'BLTR', 'LTRB']
 ]
 
 COUNT = [0 for i in range(3)]
+
+def bit_xor(a_list, b_list):
+    return [] if len(a_list) != len(b_list) \
+        else [a_list[index]^b_list[index] for index in range(len(a_list))]
 
 def EuclidDistance(point_1, point_2):
     return math.sqrt((point_2[1] - point_1[1]) ** 2 + (point_2[0] - point_1[0]) ** 2)
@@ -59,6 +71,7 @@ def process(frame):
                                       thresholdType=cv2.THRESH_BINARY_INV,
                                       blockSize=29, C=11)
 
+    # cv2.imshow("sađ", threshold)
     threshold = cv2.medianBlur(src=threshold, ksize=5)
 
     edges = cv2.Canny(image=threshold,
@@ -105,7 +118,12 @@ def process(frame):
         contour, points = _
         pts = np.float32(points)
         # print(pts)
-        dst_pts = np.float32([[MARKER_RESIZE, 0], [MARKER_RESIZE, MARKER_RESIZE], [0, MARKER_RESIZE], [0, 0]])
+        dst_pts = np.float32(
+            [[MARKER_RESIZE, 0],
+             [MARKER_RESIZE, MARKER_RESIZE],
+             [0, MARKER_RESIZE],
+             [0, 0]]
+        )
         M = cv2.getPerspectiveTransform(pts, dst_pts)
         warped = cv2.warpPerspective(src=frame, M=M,
                                      dsize=(MARKER_RESIZE, MARKER_RESIZE),
@@ -120,19 +138,20 @@ def edge_process(image):
     ret, border = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY_INV)
     code = ""
     area = 25 * 20
-    if border is None:
-        return "*"
+    if border is None or border.shape[1] < 300:
+        return "0"
     # print(border.shape, border.shape[1] / 20)
-    for index, k in enumerate(range(round(border.shape[1] / 20), border.shape[1], round(border.shape[1] / 20) * 2)):
-        if index == 9:
-            break
+    index = 0
+    for k in range(round(border.shape[1] / 20), border.shape[1], round(border.shape[1] / 20) * 2):
         # cv2.rectangle(image, (k, 0), (k + 24, border.shape[1]), (128, 128, 128), cv2.FILLED)
         if np.sum(border[0:k, k:min(k + 24, border.shape[1])]) / 255 > area * 0.3:
             code += "0"
         else:
             code += "1"
-
-    return code if len(code) == 9 else "*"
+        index += 1
+        if index == 9:
+            break
+    return code if len(code) == 9 else "0"
 
 def marker_process(image, index):
     size = image.shape[0]
@@ -146,16 +165,16 @@ def marker_process(image, index):
                       threshold2=200)
 
     contours, hierarchy = cv2.findContours(image=edges,
-                                           mode=cv2.RETR_EXTERNAL,
+                                           mode=cv2.RETR_TREE,
                                            method=cv2.CHAIN_APPROX_SIMPLE)
 
     m, box = 0, (0, 0, size, size)
-    for i in range(len(contours)):
-        box_ = cv2.boundingRect(contours[i])
-        area = box_[2] * box_[3]
+    for contour in contours:
+        _box = cv2.boundingRect(contour)
+        area = _box[2] * _box[3]
         if area > m:
             m = area
-            box = box_
+            box = _box
 
     x = 3
     img = threshold[box[1] + x:box[1] + box[3] - x, box[0] + x:box[0] + box[2] - x]
@@ -170,36 +189,26 @@ def marker_process(image, index):
     ]
     mats = [binaryToDecimal(int(edge_process(edges_image[i]))) for i in range(4)]
     # [cv2.imshow(str(i), edges_image[i]) for i in range(4)]
-
+    # cv2.imshow(str(index), img)
     key = ""
     position = ""
 
     if sum(mats) == 511 * 4 or sum(mats) == 0:
         return key, position, threshold
 
-    print(mats)
+    mm = 2
+    for index in range(4):
+        xor_list = bit_xor(mats, ID_0)
+        counts = {}
+        for i in xor_list:
+            counts[i] = counts.get(i, 0) + 1
+        _key = max(counts, key=counts.get)
+        if _key in ID and counts[_key] > mm:
+            mm = counts[_key]
+            key, position = _key, POSITION[index]
+            # print(index, mats, POSITION[index])
+        mats.append(mats.pop(0))
 
-    for index, value in enumerate(mats):
-        print(index, value)
-
-    #
-    # lss = [val.split('-') for val, mat in dt.items()]
-    # itms = {}
-    # for i in range(len(mats)):
-    #     value = mats[i]
-    #     for j in range(len(lss)):
-    #         ls = lss[j]
-    #         if value in ls:
-    #             # key = '-'.join(ls)
-    #             # position = bb[i][ls.index(value)]
-    #             if '-'.join(ls) + str(":") + bb[i][ls.index(value)] in itms:
-    #                 itms['-'.join(ls) + str(":") + bb[i][ls.index(value)]] += 1
-    #             else:
-    #                 itms['-'.join(ls) + str(":") + bb[i][ls.index(value)]] = 1
-    # if len(itms) != 0:
-    #     key, position = max(itms.items(), key=operator.itemgetter(1))[0].split(":")
-    #     if itms[key + str(":") + position] < 2:
-    #         key, position = "", ""
     return key, position, threshold
 
 def post_processing(frame, warped_images):
@@ -211,33 +220,38 @@ def post_processing(frame, warped_images):
     list_index = []
 
     for i in range(len(warped_images)):
-        warped, pts_dst, contour = warped_images[i]
-        mask_value, mask_key, threshold = marker_process(warped, i)
-        # if mask_value == "":
-        #     continue
-        # print(i, ":", mask_value, mask_key)
-        # if mask_value in dt:
-        #     COUNT[2] += 1
-        #     rpl_mark = dt[mask_value]
-        #     size_out = rpl_mark.shape[0]
-        #     if mask_key == "LTRB":
-        #         pass
-        #     elif mask_key == "BLTR":
-        #         rpl_mark = rotate_image(rpl_mark, 270)
-        #     elif mask_key == "RBLT":
-        #         rpl_mark = rotate_image(rpl_mark, 180)
-        #     elif mask_key == "TRBL":
-        #         rpl_mark = rotate_image(rpl_mark, 90)
-        #     else:
-        #         print("bug", mask_value, mask_key)
-        #         exit(0)
-        #     pts = np.float32([[size_out, 0], [size_out, size_out], [0, size_out], [0, 0]])
-        #     M = cv2.getPerspectiveTransform(pts, pts_dst)
-        #     dst = cv2.warpPerspective(rpl_mark, M, (frame.shape[1], frame.shape[0]))
-        #
-        #     # draw process
-        #     cv2.drawContours(result, [contour], -1, (0, 0, 0), cv2.FILLED)
-        #     result = cv2.bitwise_xor(result, dst, mask=None)
+        warped, points_warped, contour = warped_images[i]
+        key, position, threshold = marker_process(warped, i)
+
+        # print(key, position)
+        if key == "":
+            continue
+        if key in ID:
+            replace_image = ID[key]
+            replace_image_size = replace_image.shape[0]
+            if position == "LTRB":
+                pass
+            elif position == "BLTR":
+                replace_image = rotate_image(replace_image, 270)
+            elif position == "RBLT":
+                replace_image = rotate_image(replace_image, 180)
+            elif position == "TRBL":
+                replace_image = rotate_image(replace_image, 90)
+            else:
+                print("bug", key, position)
+                exit(0)
+            # cv2.imshow(str(i), replace_image)
+            points = np.float32(
+                [[replace_image_size, 0],
+                 [replace_image_size, replace_image_size],
+                 [0, replace_image_size],
+                 [0, 0]]
+            )
+            M = cv2.getPerspectiveTransform(points, points_warped)
+            warped_image = cv2.warpPerspective(replace_image, M, (frame.shape[1], frame.shape[0]))
+
+            cv2.drawContours(result, [contour], -1, (0, 0, 0), cv2.FILLED)
+            result = cv2.bitwise_xor(result, warped_image, mask=None)
 
     warped_images.clear()
     list_index.clear()
@@ -252,41 +266,40 @@ def find_frames(frame):
 
 
 if __name__ == '__main__':
-    image = cv2.imread("a.png")
-
-    image = find_frames(image)
-
-    cv2.imwrite("as.jpg", image)
-    cv2.waitKey(0)
-
-    # cap = cv2.VideoCapture("Data\\video2.mp4")
-    # frame_width, frame_height = int(cap.get(3)), int(cap.get(4))
-    # out = cv2.VideoWriter('outvideo2.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (frame_width,
-    # frame_height))
-    # frame_count = 0
-    # while True:
-    #     # Capture frame-by-frame
-    #     ret, frame = cap.read()
-    #     if frame is None:
-    #         break
-    #     x = frame.copy()
-    #     frame_count += 1
-    #     time_start = time.clock()
-    #     frames = find_frames(frame)
+    # image = cv2.imread("a.png")
     #
-    #     time_elapsed = (time.clock() - time_start)
-    #     print("frame :", frame_count, "-", time_elapsed)
+    # image = find_frames(image)
     #
-    #     result = np.hstack((x, frames))
-    #     cv2.imshow("frame", result)
-    #     out.write(frames)
-    #     # if frame_count == 17:
-    #     #     break
-    #     if cv2.waitKey(1) & 0xFF == ord('q'):
-    #         break
+    # cv2.imwrite("as.jpg", image)
     # cv2.waitKey(0)
-    # print(COUNT)
-    # # When everything done, release the capture
-    # out.release()
-    # cap.release()
+
+    cap = cv2.VideoCapture("Data\\video2.mp4")
+    frame_width, frame_height = int(cap.get(3)), int(cap.get(4))
+    out = cv2.VideoWriter('outvideo2.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (frame_width,
+    frame_height))
+    frame_count = 0
+    while True:
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        if frame is None:
+            break
+        x = frame.copy()
+        frame_count += 1
+        time_start = time.clock()
+        frames = find_frames(frame)
+
+        time_elapsed = (time.clock() - time_start)
+        print("frame :", frame_count, "-", time_elapsed)
+
+        result = np.hstack((x, frames))
+        cv2.imshow("frame", result)
+        out.write(frames)
+        # if frame_count == 17:
+        #     break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    print(COUNT)
+    # When everything done, release the capture
+    out.release()
+    cap.release()
     cv2.destroyAllWindows()
