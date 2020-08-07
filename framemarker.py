@@ -2,10 +2,12 @@ import math
 import operator
 import time
 from operator import itemgetter
+from shapely.geometry import Polygon
 
 import cv2
 import numpy as np
 
+SCALE_PERCENT = 60  # percent of original size
 MARKER_RESIZE = 504  # 24 * 21 | 20 * 21
 MARK_IMAGE_1 = cv2.imread("C:\\Users\\Admin\\PycharmProjects\\FrameMarkers\\Data\\image\\guy.jpg", 1)
 MARK_IMAGE_2 = cv2.imread("C:\\Users\\Admin\\PycharmProjects\\FrameMarkers\\Data\\image\\stewie.jpg", 1)
@@ -33,6 +35,13 @@ POSITION = [
 
 COUNT = [0 for i in range(3)]
 
+def calculate_iou(box_1, box_2):
+    poly_1 = Polygon(box_1)
+    poly_2 = Polygon(box_2)
+    iou = poly_1.intersection(poly_2).area / poly_1.union(poly_2).area
+    return iou
+
+
 def bit_xor(a_list, b_list):
     return [] if len(a_list) != len(b_list) \
         else [a_list[index]^b_list[index] for index in range(len(a_list))]
@@ -56,6 +65,8 @@ def binaryToDecimal(binary):
     return decimal
 
 def process(frame):
+    time_start_1 = time.time()
+
     gray = cv2.cvtColor(src=frame,
                         code=cv2.COLOR_BGR2GRAY)
 
@@ -72,27 +83,30 @@ def process(frame):
                                       blockSize=29, C=11)
 
     threshold = cv2.medianBlur(src=threshold, ksize=5)
-
     edges = cv2.Canny(image=threshold,
                       threshold1=50,
                       threshold2=200)
 
-    contours, hierarchy = cv2.findContours(image=edges,
+    contours, hierarchy = cv2.findContours(image=threshold,
                                            mode=cv2.RETR_TREE,
                                            method=cv2.CHAIN_APPROX_NONE)
 
+    time_end_1 = time.time() - time_start_1
+    # print(f"step 1: {time_end_1}")
+
+    time_start_2 = time.time()
     contours = [contour for contour in contours if cv2.contourArea(contour) > 3000.0]
 
     list_approxs = []
-    for i, contour in enumerate(contours):
-        epsilon = 0.05 * cv2.arcLength(contours[i], True)
-        approx = cv2.approxPolyDP(contours[i], epsilon, True)
+
+    for i in range(len(contours)):
+        contour = contours[i]
+        epsilon = 0.05 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
         hull = cv2.convexHull(approx)
 
-        if len(hull) == 4 and (cv2.contourArea(hull) - cv2.contourArea(approx) <= 300.0):
-            points = []
-            for _contour in hull:
-                points.append(list(_contour[0]))
+        if len(hull) == 4 and (cv2.contourArea(hull) - cv2.contourArea(approx) <= 100.0):
+            points = [list(_contour[0]) for _contour in hull]
 
             avg_length = (EuclidDistance(points[0], points[1])
                           + EuclidDistance(points[1], points[2])
@@ -111,8 +125,35 @@ def process(frame):
 
             del points
         del hull
-            # cv2.drawContours(frame, [hull], -1, (255, 0, 0), 3, 8)
 
+    approx_list = {}
+    rm = []
+
+    for i in range(len(list_approxs)):
+        for j in range(i + 1, len(list_approxs)):
+            iou = calculate_iou(list_approxs[j][1], list_approxs[i][1])
+            area_1, area_2 = cv2.contourArea(list_approxs[i][0]), cv2.contourArea(list_approxs[j][0])
+            if iou > 0.0:
+                index = i if area_1 > area_2 else j
+                if index in rm:
+                    break
+                else:
+                    idx = i if i != index else j
+                    rm.append(idx)
+
+                approx_list[index] = list_approxs[index]
+    del rm
+
+    list_approxs.clear()
+    for key, value in approx_list.items():
+        # cv2.drawContours(frame, [value[0]], -1, (0, 0, 255), 3, 8)
+        list_approxs.append(value)
+
+    del approx_list
+    time_end_2 = (time.time() - time_start_2)
+    # print(f"step 2: {time_end_2}")
+
+    time_start_3 = time.time()
     warped_images = []
 
     for contour, points in list_approxs:
@@ -131,7 +172,8 @@ def process(frame):
         # cv2.drawContours(frame, [contour], -1, (0, 0, 0), cv2.FILLED)
 
         warped_images.append((warped, points, contour))
-
+    time_end_3 = time.time() - time_start_3
+    # print(f"step 3: {time_end_3}")
     return warped_images
 
 def edge_process(image):
@@ -144,10 +186,12 @@ def edge_process(image):
     index = 0
     for k in range(round(border.shape[1] / 20), border.shape[1], round(border.shape[1] / 20) * 2):
         # cv2.rectangle(image, (k, 0), (k + 24, border.shape[1]), (128, 128, 128), cv2.FILLED)
-        if np.sum(border[0:k, k:min(k + 24, border.shape[1])]) / 255 > area * 0.3:
-            code += "0"
-        else:
-            code += "1"
+        x = "0" if np.sum(border[0:k, k:min(k + 24, border.shape[1])]) / 255 > area * 0.3 else "1"
+        code += x
+        # if np.sum(border[0:k, k:min(k + 24, border.shape[1])]) / 255 > area * 0.3:
+        #     code += "0"
+        # else:
+        #     code += "1"
         index += 1
         if index == 9:
             break
@@ -176,8 +220,13 @@ def marker_process(image, index):
             m = area
             box = _box
 
-    x = 3
-    img = threshold[box[1] + x:box[1] + box[3] - x, box[0] + x:box[0] + box[2] - x]
+    border = 3
+    img = threshold[box[1] + border:box[1] + box[3] - border,
+          box[0] + border:box[0] + box[2] - border]
+    # cv2.imwrite(str(index) + "!2321312thr.jpg", threshold)
+
+    # img = threshold[int(size / 12):size - int(size / 20),
+    #       int(size / 12):size - int(size / 20)]
     size = img.shape[0]
 
     edges_image = [
@@ -189,7 +238,9 @@ def marker_process(image, index):
     ]
     mats = [binaryToDecimal(int(edge_process(edges_image[i]))) for i in range(4)]
     # [cv2.imshow(str(i), edges_image[i]) for i in range(4)]
-    # cv2.imshow(str(index), img)
+    # cv2.imshow(str(index) + "!2321312", img)
+    # cv2.waitKey(0)
+    # exit(0)
     key = ""
     position = ""
 
@@ -220,9 +271,11 @@ def post_processing(frame, warped_images):
     result = frame.copy()
 
     for i, (warped, warped_points, contour) in enumerate(warped_images):
+        time_start_1 = time.time()
         key, position, threshold = marker_process(warped, i)
+        time_end_1 = (time.time() - time_start_1)
+        # print(f"marker process {i} took {time_end_1}")
 
-        # print(key, position)
         if key == "":
             continue
         if key in ID:
@@ -258,23 +311,40 @@ def post_processing(frame, warped_images):
     return result
 
 def find_frames(frame):
-    warped_images = process(frame)
+    # width = int(frame.shape[1] * SCALE_PERCENT / 100)
+    # height = int(frame.shape[0] * SCALE_PERCENT / 100)
+    # dim = (width, height)
+    # # resize image
+    # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_LINEAR)
 
+    time_start_o = time.time()
+    warped_images = process(frame)
+    time_elapsed_o = (time.time() - time_start_o)
+    # print(f"detect object took {time_elapsed_o}")
+
+    time_start = time.time()
     frame = post_processing(frame, warped_images)
+    time_elapsed = (time.time() - time_start)
+
+    # print(f"post_processing took {time_elapsed}")
 
     return frame
 
 
 if __name__ == '__main__':
-    # image = cv2.imread("a.png")
+    # image = cv2.imread("bug.jpg")
     #
+    # time_start = time.time()
     # image = find_frames(image)
+    # time_elapsed = (time.time() - time_start)
     #
-    # cv2.imwrite("as.jpg", image)
+    # print(f"process {image.shape} took {time_elapsed}")
+    #
+    # cv2.imwrite("result.jpg", image)
     # cv2.waitKey(0)
 
-    # cap = cv2.VideoCapture("Data\\video2.mp4")
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture("Data\\video2.mp4")
+    # cap = cv2.VideoCapture(0)
     frame_width, frame_height = int(cap.get(3)), int(cap.get(4))
     out = cv2.VideoWriter('outvideo2.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 10, (frame_width,
     frame_height))
@@ -291,18 +361,24 @@ if __name__ == '__main__':
         frames = find_frames(frame)
 
         time_elapsed = (time.clock() - time_start)
-        print("frame :", frame_count, "-", time_elapsed)
+        print(f"frame {frame_count} took : {time_elapsed}")
+
+        # width = int(x.shape[1] * SCALE_PERCENT / 100)
+        # height = int(x.shape[0] * SCALE_PERCENT / 100)
+        # dim = (width, height)
+        # # resize image
+        # x = cv2.resize(x, dim, interpolation=cv2.INTER_LINEAR)
 
         result = np.hstack((x, frames))
         cv2.imshow("frame", result)
-        # out.write(frames)
+        out.write(frames)
         # if frame_count == 17:
         #     break
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-    print(COUNT)
+    cv2.waitKey(0)
     # When everything done, release the capture
-    # out.release()
+    out.release()
     cap.release()
     cv2.destroyAllWindows()
 
