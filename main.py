@@ -156,8 +156,8 @@ def processImage(image):
         list_result.append((warped, pts, sizeOut))
 
         lC.clear()
-        print(type(pts), type(contour), contour, pts, sep="\n")
-        # cv2.drawContours(image, [contour], -1, (0, 0, 0), cv2.FILLED)
+        # print(type(pts), type(contour), contour, pts, sep="\n")
+        cv2.drawContours(image, [contour], -1, (0, 0, 0), cv2.FILLED)
 
     return image, list_result
 
@@ -213,41 +213,41 @@ def rotate_image(image, angle):
 
 
 if __name__ == '__main__':
-    project()
-    # cap = cv2.VideoCapture(0)
-    # while True:
-    #     # Capture frame-by-frame
-    #     ret, frame = cap.read()
-    #     x = frame.copy()
-    #     frame, list_result = processImage(image=frame)
-    #     dest_and = frame.copy()
-    #     for i in range(len(list_result)):
-    #         mask_value, mask_key = calculateMarker(list_result[i][0])
-    #         print(i, ":", mask_value, mask_key, sep="\n")
-    #
-    #         if mask_value in dt:
-    #             rpl_mark = dt[mask_value]
-    #             sizeOut = rpl_mark.shape[0]
-    #             if mask_key == "LTRB":
-    #                 pass
-    #             elif mask_key == "BLTR":
-    #                 rpl_mark = rotate_image(rpl_mark, 90)
-    #             elif mask_key == "TRBL":
-    #                 rpl_mark = rotate_image(rpl_mark, 270)
-    #             else:
-    #                 rpl_mark = rotate_image(rpl_mark, 180)
-    #
-    #             pts1 = np.float32([[0, 0], [sizeOut, 0], [0, sizeOut], [sizeOut, sizeOut]])
-    #             pts2 = list_result[i][1]
-    #             M = cv2.getPerspectiveTransform(pts1, pts2)
-    #             dst = cv2.warpPerspective(rpl_mark, M, (frame.shape[1], frame.shape[0]))
-    #             dest_and = cv2.bitwise_xor(dest_and, dst, mask=None)
-    #
-    #     cv2.imshow('frame', x)
-    #     cv2.imshow('frame_1', dest_and)
-    #
-    #     if cv2.waitKey(1) & 0xFF == ord('q'):
-    #         break
-    # # When everything done, release the capture
-    # cap.release()
-    # cv2.destroyAllWindows()
+    # project()
+    cap = cv2.VideoCapture(0)
+    while True:
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        x = frame.copy()
+        frame, list_result = processImage(image=frame)
+        dest_and = frame.copy()
+        for i in range(len(list_result)):
+            mask_value, mask_key = calculateMarker(list_result[i][0])
+            print(i, ":", mask_value, mask_key, sep="\n")
+
+            if mask_value in dt:
+                rpl_mark = dt[mask_value]
+                sizeOut = rpl_mark.shape[0]
+                if mask_key == "LTRB":
+                    pass
+                elif mask_key == "BLTR":
+                    rpl_mark = rotate_image(rpl_mark, 90)
+                elif mask_key == "TRBL":
+                    rpl_mark = rotate_image(rpl_mark, 270)
+                else:
+                    rpl_mark = rotate_image(rpl_mark, 180)
+
+                pts1 = np.float32([[0, 0], [sizeOut, 0], [0, sizeOut], [sizeOut, sizeOut]])
+                pts2 = list_result[i][1]
+                M = cv2.getPerspectiveTransform(pts1, pts2)
+                dst = cv2.warpPerspective(rpl_mark, M, (frame.shape[1], frame.shape[0]))
+                dest_and = cv2.bitwise_xor(dest_and, dst, mask=None)
+
+        cv2.imshow('frame', x)
+        cv2.imshow('frame_1', dest_and)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    # When everything done, release the capture
+    cap.release()
+    cv2.destroyAllWindows()
