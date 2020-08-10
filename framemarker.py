@@ -182,7 +182,7 @@ def process(frame):
                 points.insert(INDEX[Edges[0][1]][0], list(key_point))
             new_hull = cv2.convexHull(np.array(
                     [points[0], points[1], points[2], points[3]]))
-            list_approxs.append((new_hullq, points))
+            list_approxs.append((new_hull, points))
             # print(points)
             # cv2.circle(frame, tuple(key_point), 5, (0, 0, 255), cv2.FILLED)
             cv2.drawContours(frame, [points], -1, (0, 0, 0), 2, 8)
