@@ -180,9 +180,9 @@ def process(frame):
                 else:
                     points.pop(INDEX[Edges[0][1]][0])
                 points.insert(INDEX[Edges[0][1]][0], list(key_point))
-            points = cv2.convexHull(np.array(
+            new_hull = cv2.convexHull(np.array(
                     [points[0], points[1], points[2], points[3]]))
-            list_approxs.append((points, points))
+            list_approxs.append((new_hullq, points))
             # print(points)
             # cv2.circle(frame, tuple(key_point), 5, (0, 0, 255), cv2.FILLED)
             cv2.drawContours(frame, [points], -1, (0, 0, 0), 2, 8)
@@ -531,7 +531,7 @@ def imgg():
 
 
 if __name__ == '__main__':
-    imgg()
-    # video()
+    # imgg()
+    video()
     print(COUNT)
     # cv2.destroyAllWindows()
