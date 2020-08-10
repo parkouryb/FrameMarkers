@@ -156,7 +156,7 @@ def processImage(image):
         list_result.append((warped, pts, sizeOut))
 
         lC.clear()
-        # print(type(pts), type(contour), contour, pts, sep="\n")
+        print(type(pts), type(contour), contour, pts, sep="\n")
         cv2.drawContours(image, [contour], -1, (0, 0, 0), cv2.FILLED)
 
     return image, list_result
