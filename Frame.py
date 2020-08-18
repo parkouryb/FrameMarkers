@@ -53,6 +53,7 @@ POSITION = [
 COUNT = [0 for i in range(3)]
 IC = [0 for i in range(4)]
 
+
 def kill_small_contour(contour, area):
     x, y, w, h = cv2.boundingRect(contour)
     return True if w * h > area else False
@@ -430,11 +431,15 @@ def videoProcess(name):
     cap = cv2.VideoCapture(name)
     # cap = cv2.VideoCapture(0)
     frame_width, frame_height = int(cap.get(3)), int(cap.get(4))
-    # frame_width, frame_height = 960, 540
-    # out = cv2.VideoWriter('2nrs_out.avi', cv2.VideoWriter_fourcc('M',
-    #                                                                'J', 'P',
-    #                                                                'G'), 10,
-    #                       (frame_width, frame_height))
+    # frame_width, frame_height = 480, 270
+    n = name.replace("Data\\Video\\", "")
+    n = n.replace(".mp4", ".avi")
+    out = cv2.VideoWriter("Data\\Video Output\\" + n,
+                          cv2.VideoWriter_fourcc('M',
+                                                 'J', 'P',
+                                                 'G'), 10,
+                          (int(frame_width * SCALE_PERCENT),
+                           int(frame_height * SCALE_PERCENT)))
     frame_count = 0
     sum = 0
     max_time = 0
@@ -452,16 +457,15 @@ def videoProcess(name):
         frame = cv2.resize(frame, (int(frame.shape[1] * SCALE_PERCENT),
                                    int(frame.shape[0] * SCALE_PERCENT)),
                            interpolation=cv2.INTER_CUBIC)
-
         frames = find_markers(frame)
 
         time_elapsed = (time.clock() - time_start)
-        print(f"frame {frame_count} {frame.shape} took : {time_elapsed}")
+        # print(f"frame {frame_count} {frame.shape} took : {time_elapsed}")
         sum += time_elapsed
         max_time = max(max_time, time_elapsed)
         min_time = min(min_time, time_elapsed)
         cv2.imshow("frame", frames)
-        # # out.write(frames)
+        out.write(frames)
         # cv2.imwrite("frames\\" + str(frame_count) + '.jpg', x)
         # cv2.imwrite("framesout\\" + str(frame_count) + '.jpg', frames)
 
@@ -469,15 +473,15 @@ def videoProcess(name):
             break
     frame_count += 1
     sum /= frame_count
-    print(f"time avg: {sum} with frame: {frame_count} and size "
-          f"{frame_width * SCALE_PERCENT, frame_height * SCALE_PERCENT}")
-    print(f"max time: {max_time}\nmin time: {min_time}")
+    # print(f"time avg: {sum} with frame: {frame_count} and size "
+    #       f"{frame_width * SCALE_PERCENT, frame_height * SCALE_PERCENT}")
+    # print(f"max time: {max_time}\nmin time: {min_time}")
     if name == 0:
         print(COUNT)
         print(IC)
     # cv2.waitKey(0)
     # When everything done, release the capture
-    # out.release()
+    out.release()
     cap.release()
 
 
@@ -490,15 +494,16 @@ def manyVideo():
         # print(COUNT)
         # print(IC)
 
+
 if __name__ == '__main__':
     # imgProcess()
     name = 'Data\\Video\\6.mp4'
-    videoProcess(0)
-    # for i in range(1, 13):
-    #     COUNT = [0 for i in range(3)]
-    #     IC = [0 for i in range(4)]
-    #     print(f"video {i}.mp4")
-    #     videoProcess("Data\\Video\\" + str(i) + ".mp4")
-    #     print(COUNT)
-    #     print(IC)
+    # videoProcess(0)
+    for i in range(1, 13):
+        COUNT = [0 for i in range(3)]
+        IC = [0 for i in range(4)]
+        print(f"video {i}.mp4")
+        videoProcess("Data\\Video Input\\" + str(i) + ".mp4")
+        # print(COUNT)
+        # print(IC)
     cv2.destroyAllWindows()
